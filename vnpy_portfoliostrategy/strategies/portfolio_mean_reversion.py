@@ -9,33 +9,35 @@ from vnpy_portfoliostrategy.utility import PortfolioBarGenerator
 
 
 class MeanReversionStrategy(StrategyTemplate):
-    """ATR-RSI趋势跟踪策略"""
+    """EWMA Mean Reversion"""
 
-    author = "用Python的交易员"
+    author = "EG"
 
-    atr_window = 22
-    atr_ma_window = 10
-    rsi_window = 5
-    rsi_entry = 16
+    fast_span = 5
+    slow_span = 60
+    signal_vol_window = 30
+
     trailing_percent = 0.8
-    fixed_size = 1
-    price_add = 5
+    portfolioVaR = 5_000
 
-    rsi_buy = 0
-    rsi_sell = 0
+    entry_lbound = 0.3
+    entry_ubound = 0.7
+
+    price_add = 10 # Essentially market order
 
     parameters = [
-        "price_add",
-        "atr_window",
-        "atr_ma_window",
-        "rsi_window",
-        "rsi_entry",
+        "fast_span",
+        "slow_span",
+        "signal_vol_window",
         "trailing_percent",
-        "fixed_size"
+        "portfolioVaR",
+        "entry_lbound",
+        "entry_ubound",
     ]
     variables = [
-        "rsi_buy",
-        "rsi_sell"
+        "ema_slow",
+        "ema_fast",
+        "emacd",
     ]
 
     def __init__(
@@ -48,15 +50,11 @@ class MeanReversionStrategy(StrategyTemplate):
         """构造函数"""
         super().__init__(strategy_engine, strategy_name, vt_symbols, setting)
 
-        self.rsi_data: dict[str, float] = {}
-        self.atr_data: dict[str, float] = {}
-        self.atr_ma: dict[str, float] = {}
-        self.intra_trade_high: dict[str, float] = {}
-        self.intra_trade_low: dict[str, float] = {}
-
+        self.emacd_data: dict[str, float] = {}
+        self.signal_strength: dict[str, float] = {}
+        
         self.last_tick_time: datetime = None
 
-        # 创建每个合约的ArrayManager
         self.ams: dict[str, ArrayManager] = {}
         for vt_symbol in self.vt_symbols:
             self.ams[vt_symbol] = ArrayManager()
@@ -64,13 +62,23 @@ class MeanReversionStrategy(StrategyTemplate):
         self.pbg = PortfolioBarGenerator(self.on_bars)
 
     def on_init(self) -> None:
-        """策略初始化回调"""
-        self.write_log("策略初始化")
+        """Initialize strategy"""
+        self.write_log(f"Portfolio Strategy {self.strategy_name} initialized")
 
         self.rsi_buy = 50 + self.rsi_entry
         self.rsi_sell = 50 - self.rsi_entry
 
         self.load_bars(10)
+
+    def calculate_unit_var(self) -> float:
+        """Calculate VaR if total portfolio weight sums to 1"""
+        
+        
+        for vt_symbol, target in self.signal_strength.items():
+            
+            pass
+        
+        # return self.portfolioVaR
 
     def on_start(self) -> None:
         """策略启动回调"""
