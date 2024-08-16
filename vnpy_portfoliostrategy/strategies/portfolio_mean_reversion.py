@@ -7,18 +7,21 @@ from vnpy.trader.constant import Direction
 from vnpy_portfoliostrategy import StrategyTemplate, StrategyEngine
 from vnpy_portfoliostrategy.utility import PortfolioBarGenerator
 
+import pandas as pd
+
 
 class MeanReversionStrategy(StrategyTemplate):
     """EWMA Mean Reversion"""
 
     author = "EG"
 
-    fast_span = 5
-    slow_span = 60
-    signal_vol_window = 30
+    span_fast = 5
+    span_slow = 60
+    window_signal_vol = 30
 
     trailing_percent = 0.8
-    portfolioVaR = 5_000
+    portfolio_var = 5_000
+    lookback_var = 30
 
     entry_lbound = 0.3
     entry_ubound = 0.7
@@ -26,17 +29,18 @@ class MeanReversionStrategy(StrategyTemplate):
     price_add = 10 # Essentially market order
 
     parameters = [
-        "fast_span",
-        "slow_span",
-        "signal_vol_window",
+        "span_fast",
+        "span_slow",
+        "window_signal_vol",
         "trailing_percent",
-        "portfolioVaR",
+        "portfolio_var",
+        "lookback_var",
         "entry_lbound",
         "entry_ubound",
     ]
     variables = [
-        "ema_slow",
         "ema_fast",
+        "ema_slow",
         "emacd",
     ]
 
@@ -52,6 +56,8 @@ class MeanReversionStrategy(StrategyTemplate):
 
         self.emacd_data: dict[str, float] = {}
         self.signal_strength: dict[str, float] = {}
+        self.unit_weights: dict[str, float] = {}
+        self.daily_prices: dict[str, pd.Series] = {}
         
         self.last_tick_time: datetime = None
 
@@ -63,22 +69,33 @@ class MeanReversionStrategy(StrategyTemplate):
 
     def on_init(self) -> None:
         """Initialize strategy"""
+        
+        self.load_bars(10)
         self.write_log(f"Portfolio Strategy {self.strategy_name} initialized")
 
-        self.rsi_buy = 50 + self.rsi_entry
-        self.rsi_sell = 50 - self.rsi_entry
+    def calculate_unit_weights(self) -> dict[str, float]:
+        """Calculate unit weights for each symbol"""
+        
+        total_strength = sum(self.signal_strength.values())
 
-        self.load_bars(10)
+        self.unit_weights = {}
+        for vt_symbol, strength in self.signal_strength.items():
+            self.unit_weights[vt_symbol] = strength / total_strength
+
+        return self.unit_weights
+        
 
     def calculate_unit_var(self) -> float:
         """Calculate VaR if total portfolio weight sums to 1"""
         
+        portfolio_return_list = []
+        for vt_symbol, strength in self.signal_strength.items():
+            portfolio_return_list.append(self.daily_prices[vt_symbol] * self.unit_weights[vt_symbol])
         
-        for vt_symbol, target in self.signal_strength.items():
-            
-            pass
-        
-        # return self.portfolioVaR
+        portfolio_return = pd.concat(portfolio_return_list, axis=1).sum(axis=1)
+        unit_var = portfolio_return.ewm(span=self.lookback_var).std().iloc[-1]
+
+        return unit_var
 
     def on_start(self) -> None:
         """策略启动回调"""
@@ -143,6 +160,10 @@ class MeanReversionStrategy(StrategyTemplate):
         self.rebalance_portfolio(bars)
 
         self.put_event()
+
+    def on_window_bars(self, bars: dict[str, BarData]) -> None:
+        pass
+        
 
     def calculate_price(self, vt_symbol: str, direction: Direction, reference: float) -> float:
         """计算调仓委托价格（支持按需重载实现）"""
