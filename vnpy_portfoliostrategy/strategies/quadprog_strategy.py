@@ -16,7 +16,6 @@ class QuadProgStrategy(StrategyTemplate):
     author = "EG"
 
     window_size = 10
-
     price_add = 10 # Essentially market order
 
     parameters = [
@@ -42,7 +41,6 @@ class QuadProgStrategy(StrategyTemplate):
         vt_symbols: list[str],
         setting: dict
     ) -> None:
-        """构造函数"""
         super().__init__(strategy_engine, strategy_name, vt_symbols, setting)
 
         self.emacd_data: dict[str, float] = {}
